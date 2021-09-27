@@ -1,45 +1,16 @@
 from argparse import ArgumentParser
 
 import torch
-from transformers import RealmTokenizer
-from transformers.models.realm.modeling_realm import load_tf_weights_in_realm, RealmConfig, RealmReader, RealmSearcher, logger
+from transformers.models.realm.modeling_realm import logger
 from transformers.utils import logging
+
+from model import get_searcher_reader_tokenizer
 
 logger.setLevel(logging.INFO)
 torch.set_printoptions(precision=8)
 
-def get_searcher_reader(args):
-    searcher_config = RealmConfig(hidden_act="gelu_new")
-    searcher = RealmSearcher(searcher_config, args.block_records_path)
-    
-    # Load retriever weights
-    searcher = load_tf_weights_in_realm(
-        searcher,
-        searcher_config,
-        args.retriever_path,
-    )
-
-    # Load block_emb weights
-    searcher = load_tf_weights_in_realm(
-        searcher,
-        searcher_config,
-        args.block_emb_path,
-    )
-    searcher.eval()
-
-    reader_config = RealmConfig(hidden_act="gelu_new")
-    reader = RealmReader.from_pretrained(
-        args.checkpoint_path,
-        config=reader_config,
-        from_tf=True,
-    )
-    reader.eval()
-
-    return searcher, reader
-
-def retrieve(args, searcher):
+def retrieve(args, searcher, tokenizer):
     with torch.no_grad():
-        tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder")
         question = args.question
         question_ids = tokenizer([question], return_tensors='pt')
 
@@ -49,9 +20,8 @@ def retrieve(args, searcher):
 
     return output
 
-def read(args, reader, searcher_output):
+def read(args, reader, tokenizer, searcher_output):
     with torch.no_grad():
-        tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
         text = []
         text_pair = []
         for retrieved_block in searcher_output.retrieved_blocks:
@@ -73,10 +43,10 @@ def read(args, reader, searcher_output):
     return output, answer
 
 def main(args):
-    searcher, reader = get_searcher_reader(args)
+    searcher, reader, tokenizer = get_searcher_reader_tokenizer(args)
     
-    retriever_output = retrieve(args, searcher)
-    reader_output, answer = read(args, reader, retriever_output)
+    retriever_output = retrieve(args, searcher, tokenizer)
+    reader_output, answer = read(args, reader, tokenizer, retriever_output)
 
     print(f"Question: {args.question}\nAnswer: {answer}")
 
