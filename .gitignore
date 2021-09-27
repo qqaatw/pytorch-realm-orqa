@@ -1,0 +1,3 @@
+data/*
+!data/download.sh
+!data/requirements.txt
