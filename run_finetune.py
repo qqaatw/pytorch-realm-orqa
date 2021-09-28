@@ -12,7 +12,7 @@ from transformers import RealmConfig, get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
 from transformers.models.realm.modeling_realm import logger as model_logger
 
-from model import get_searcher_reader_tokenizer
+from model import get_searcher_reader_tokenizer, get_searcher_reader_tokenizer_pt
 from data import load_nq
 
 model_logger.setLevel(logging.INFO)
@@ -180,7 +180,7 @@ def main(args):
     config = RealmConfig(searcher_beam_size=10)
     training_dataset, eval_dataset = load_nq(args)
 
-    searcher, reader, tokenizer = get_searcher_reader_tokenizer(args, config)
+    searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt(args, config)
 
     optimizer = AdamW(
         itertools.chain(searcher.parameters(), reader.parameters()),
@@ -297,9 +297,9 @@ if __name__ == "__main__":
     # Retriever
     parser.add_argument("--block_emb_path", type=str, default=r"./data/cc_news_pretrained/embedder/encoded/encoded.ckpt")
     parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
-    parser.add_argument("--retriever_path", type=str, default=r"./data/cc_news_pretrained/embedder/variables/variables")
+    parser.add_argument("--retriever_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-retriever")
     # Reader
-    parser.add_argument("--checkpoint_path", type=str, default=r"./data/cc_news_pretrained/bert/variables/variables")
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-bert")
 
     args = parser.parse_args()
     
