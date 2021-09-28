@@ -1,3 +1,6 @@
-data/*
-!data/download.sh
-!data/requirements.txt
+__pycache__
+checkpoint.pt
+
+/data/*
+!/data/download.sh
+!/data/requirements.txt
