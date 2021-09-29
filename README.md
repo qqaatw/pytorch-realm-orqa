@@ -22,6 +22,22 @@ pip install -U -r requirements.txt
 sh download.sh
 ```
 
+## Finetune (Experimental)
+
+The default finetuning dataset is **Natural Question(NQ)**. To laod your custom dataset, please change the loading function in `data.py`.
+
+Training:
+
+```bash
+python run_finetune.py --is_train --model_dir ./ --num_epochs 2
+```
+
+Evaluation:
+
+```bash
+python run_finetune.py --retriever_pretrained_name "retriever" --checkpoint_pretrained_name "reader"
+```
+
 ## Predict
 
 The default checkpoints of retriever and reader are `cc_news_pretrained` and `orqa_nq_model_from_realm`, respectively. To change them, kindly specify `--retriever_path` and `--checkpoint_path`.

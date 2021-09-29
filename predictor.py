@@ -4,7 +4,7 @@ import torch
 from transformers.models.realm.modeling_realm import logger
 from transformers.utils import logging
 
-from model import get_searcher_reader_tokenizer
+from model import get_searcher_reader_tokenizer_tf
 
 logger.setLevel(logging.INFO)
 torch.set_printoptions(precision=8)
@@ -43,7 +43,7 @@ def read(args, reader, tokenizer, searcher_output):
     return output, answer
 
 def main(args):
-    searcher, reader, tokenizer = get_searcher_reader_tokenizer(args)
+    searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args)
     
     retriever_output = retrieve(args, searcher, tokenizer)
     reader_output, answer = read(args, reader, tokenizer, retriever_output)

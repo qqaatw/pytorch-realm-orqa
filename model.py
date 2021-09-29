@@ -6,7 +6,7 @@ from transformers.models.realm.modeling_realm import (
     RealmSearcher,
 )
 
-def get_searcher_reader_tokenizer(args, config=None):
+def get_searcher_reader_tokenizer_tf(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
     searcher = RealmSearcher(config, args.block_records_path)
@@ -53,6 +53,16 @@ def get_searcher_reader_tokenizer_pt(args, config=None):
     reader = RealmReader.from_pretrained(args.checkpoint_pretrained_name, config=config)
     reader.eval()
 
-    tokenizer = RealmTokenizer.from_pretrained(args.retriever_pretrained_name, do_lower_case=True)
+    tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+
+    return searcher, reader, tokenizer
+
+def get_searcher_reader_tokenizer(args, config=None):
+    if config is None: 
+        config = RealmConfig(hidden_act="gelu_new")
+
+    searcher = RealmSearcher(config)
+    reader = RealmReader(config)
+    tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     return searcher, reader, tokenizer
