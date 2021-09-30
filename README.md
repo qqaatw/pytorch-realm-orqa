@@ -49,10 +49,12 @@ python run_finetune.py \
 
 ## Predict
 
-The default checkpoints of retriever and reader are `cc_news_pretrained` and `orqa_nq_model_from_realm`, respectively. To change them, kindly specify `--retriever_path` and `--checkpoint_path`.
+The default checkpoints of retriever and reader are `orqa_nq_model_from_realm`. To change them, kindly specify `--retriever_path` and `--checkpoint_path`.
 
 ```bash
 python predictor.py --question "Who is the pioneer in modern computer science?"
+
+Output: alan mathison turing
 ```
 
 ## License

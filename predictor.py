@@ -58,7 +58,7 @@ if __name__ == "__main__":
     # Retriever
     parser.add_argument("--block_emb_path", type=str, default=r"./data/cc_news_pretrained/embedder/encoded/encoded.ckpt")
     parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
-    parser.add_argument("--retriever_path", type=str, default=r"./data/cc_news_pretrained/embedder/variables/variables")
+    parser.add_argument("--retriever_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
     # Reader
     parser.add_argument("--checkpoint_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
 
