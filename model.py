@@ -61,7 +61,7 @@ def get_searcher_reader_tokenizer(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
 
-    searcher = RealmSearcher(config)
+    searcher = RealmSearcher(config, args.block_records_path)
     reader = RealmReader(config)
     tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
 

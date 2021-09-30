@@ -3,12 +3,12 @@ import os
 import logging
 
 
-
 import torch
 import itertools
 from transformers import RealmConfig, get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
 from transformers.models.realm.modeling_realm import logger as model_logger
+from tqdm import tqdm
 
 from model import get_searcher_reader_tokenizer, get_searcher_reader_tokenizer_pt
 from data import load_nq, normalize_answer
@@ -22,7 +22,8 @@ torch.set_printoptions(precision=8)
 MAX_EPOCHS = 100
 
 class DataCollator(object):
-    def __init__(self, tokenizer):
+    def __init__(self, args, tokenizer):
+        self.args = args
         self.tokenizer = tokenizer
     def __call__(self, batch):
         example = batch[0]
@@ -32,10 +33,52 @@ class DataCollator(object):
             answer_texts += short_answer["text"]
         answer_texts = list(set(answer_texts))
         if len(answer_texts) != 0:
-            answers = self.tokenizer(answer_texts, add_special_tokens=False, return_token_type_ids=False, return_attention_mask=False).input_ids
+            answers = self.tokenizer(answer_texts, 
+                add_special_tokens=False, return_token_type_ids=False, return_attention_mask=False).input_ids
+            answers = list(filter(lambda answer: len(answer) <= self.args.max_answer_tokens, answers))
         else:
             answers = [[-1]]
         return question, answer_texts, answers
+
+def get_arg_parser():
+    parser = ArgumentParser()
+
+    # Data processing
+    parser.add_argument("--dev_ratio", type=float, default=0.1)
+    parser.add_argument("--max_answer_tokens", type=int, default=5)
+
+    # Training dir
+    parser.add_argument("--dataset_name_path", type=str, default=r"natural_questions")
+    parser.add_argument("--dataset_cache_dir", type=str, default=r"./data/dataset_cache_dir/")
+    parser.add_argument("--model_dir", type=str, default=r"./")
+
+    # Training hparams
+    parser.add_argument("--ckpt_interval", type=int, default=10)
+    parser.add_argument("--device", type=str, default='cuda')
+    parser.add_argument("--is_train", action="store_true")
+    parser.add_argument("--learning_rate", type=float, default=1e-5)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--searcher_beam_size", type=int, default=5000)
+    parser.add_argument("--reader_beam_size", type=int, default=5)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--num_training_steps", type=int, default=100)
+    group.add_argument("--num_epochs", type=int, default=0)
+
+    # Evaluation hparams
+    parser.add_argument("--checkpoint_name", type=str, default="checkpoint.pt")
+
+    # Model path
+    # Retriever
+    parser.add_argument("--block_emb_path", type=str, default=r"./data/cc_news_pretrained/embedder/encoded/encoded.ckpt")
+    parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
+    parser.add_argument("--retriever_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-retriever")
+    # Reader
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-bert")
+    # For Benchmark testing
+    parser.add_argument("--retriever_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
+    parser.add_argument("--checkpoint_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
+
+    return parser
 
 def compute_eval_metrics(labels, predicted_answer, reader_output):
     """Compute eval metrics."""
@@ -156,18 +199,17 @@ def read(args, reader, tokenizer, searcher_output, question, answers):
 
     return output, answer
 
-
 def main(args):
     config = RealmConfig(searcher_beam_size=10)
     if args.resume:
         searcher, reader, tokenizer = get_searcher_reader_tokenizer(args, config)
     else:
-        searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt(args, config)
+        #searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt(args, config)
         # To test benchmark, please uncomment below lines and comment the above line.
-        # from model import get_searcher_reader_tokenizer_tf
-        # searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
+        from model import get_searcher_reader_tokenizer_tf
+        searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
 
-    training_dataset, eval_dataset = load_nq(args, tokenizer)
+    training_dataset, dev_dataset, eval_dataset = load_nq(args, tokenizer)
 
     optimizer = AdamW(
         itertools.chain(searcher.parameters(), reader.parameters()),
@@ -183,10 +225,11 @@ def main(args):
 
     if args.is_train:
         if args.resume:
-            checkpoint = torch.load(os.path.join(args.model_dir, "checkpoint.bin"))
+            checkpoint = torch.load(os.path.join(args.model_dir, "checkpoint.pt"), map_location='cpu')
             searcher.load_state_dict(checkpoint["searcher_state_dict"])
             reader.load_state_dict(checkpoint["reader_state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
             global_step = checkpoint["training_step"]
             starting_epoch = checkpoint["training_epoch"]
         else:
@@ -199,14 +242,19 @@ def main(args):
         reader.train()
         reader.to(args.device)
 
-
         # Setup data
         print(training_dataset)
-        data_collector = DataCollator(tokenizer)
+        data_collector = DataCollator(args, tokenizer)
         train_dataloader = torch.utils.data.DataLoader(
             dataset=training_dataset,
             batch_size=1,
             shuffle=True,
+            collate_fn=data_collector
+        )
+        eval_dataloader = torch.utils.data.DataLoader(
+            dataset=dev_dataset,
+            batch_size=1,
+            shuffle=False,
             collate_fn=data_collector
         )
 
@@ -228,15 +276,15 @@ def main(args):
                 logging.info(f"Epoch: {epoch}, Step: {global_step}, Retriever Loss: {reader_output.retriever_loss.mean()}, Reader Loss: {reader_output.reader_loss.mean()}\nQuestion: {question}, Gold Answer: {tokenizer.batch_decode(answers) if answers != [[-1]] else None}, Predicted Answer: {predicted_answer}")
 
                 if global_step % args.ckpt_interval == 0:
-                    metrics = compute_eval_metrics(answer_texts, predicted_answer, reader_output)
-                    logging.info(f"Step: {global_step} {metrics}")
                     logging.info(f"Saving checkpint at step {global_step}")
                     torch.save(
                         {
                             'searcher_state_dict': searcher.state_dict(),
                             'reader_state_dict': reader.state_dict(),
                             'optimizer_state_dict': optimizer.state_dict(),
-                            'training_step': global_step
+                            'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+                            'training_step': global_step,
+                            'training_epoch': epoch,
                         }, 
                         os.path.join(args.model_dir, "checkpoint.pt")
                     )
@@ -244,6 +292,24 @@ def main(args):
                 global_step += 1
                 if global_step >= args.num_training_steps:
                     break
+            
+            # Eval
+            searcher.eval()
+            reader.eval()
+            all_metrics = []
+            for batch in tqdm(eval_dataloader):
+                question, answer_texts, answers = batch
+                with torch.no_grad():
+                    retriever_output = retrieve(args, searcher, tokenizer, question)
+                    reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answers)
+                    all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, reader_output))
+
+            stacked_metrics = { 
+                metric_key : torch.stack((*map(lambda metrics: metrics[metric_key], all_metrics),)) for metric_key in all_metrics[0].keys()
+            }
+            logging.info(f"Step: {global_step}, Epoch: {epoch}")
+            logging.info('\n'.join(map(lambda metric: f"{metric[0]}:{metric[1].type(torch.float32).mean()}", stacked_metrics.items())))
+            
             if global_step >= args.num_training_steps:
                 break
 
@@ -259,7 +325,7 @@ def main(args):
 
         # Setup data
         print(eval_dataset)
-        data_collector = DataCollator(tokenizer)
+        data_collector = DataCollator(args, tokenizer)
         eval_dataloader = torch.utils.data.DataLoader(
             dataset=eval_dataset,
             batch_size=1,
@@ -268,58 +334,25 @@ def main(args):
         )
 
         all_metrics = []
-        for batch in eval_dataloader:
+        for batch in tqdm(eval_dataloader):
             question, answer_texts, answers = batch
             with torch.no_grad():
                 retriever_output = retrieve(args, searcher, tokenizer, question)
                 reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answers)
                 all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, reader_output))
 
-        exact_matches = torch.stack((*map(lambda metrics: metrics["exact_match"], all_metrics),))
-        official_exact_matches = torch.stack((*map(lambda metrics: metrics["official_exact_match"], all_metrics),))
-        reader_oracle = torch.stack((*map(lambda metrics: metrics["reader_oracle"], all_metrics),))
 
-        logging.info(f"Exact Match: {exact_matches.type(torch.float32).mean()}")
-        logging.info(f"Official Exact Match: {official_exact_matches.type(torch.float32).mean()}")
-        logging.info(f"Reader Oracle: {reader_oracle.type(torch.float32).mean()}")
+        stacked_metrics = { 
+            metric_key : torch.stack((*map(lambda metrics: metrics[metric_key], all_metrics),)) for metric_key in all_metrics[0].keys()
+        }
+
+        logging.info('\n'.join(map(lambda metric: f"{metric[0]}:{metric[1].type(torch.float32).mean()}", stacked_metrics.items())))
         
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
-    
     logging.info("Test logging")
 
-    # Training dir
-    parser.add_argument("--dataset_name_path", type=str, default=r"natural_questions")
-    parser.add_argument("--dataset_cache_dir", type=str, default=r"./data/dataset_cache_dir/")
-    parser.add_argument("--model_dir", type=str, default=r"./")
-
-    # Training hparams
-    parser.add_argument("--device", type=str, default='cuda')
-    parser.add_argument("--learning_rate", type=float, default=1e-5)
-    parser.add_argument("--is_train", action="store_true")
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--ckpt_interval", type=int, default=10)
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--num_training_steps", type=int, default=100)
-    group.add_argument("--num_epochs", type=int, default=0)
-
-    # Evaluation hparams
-    parser.add_argument("--checkpoint_name", type=str, default="checkpoint.pt")
-
-    # Retriever
-    parser.add_argument("--block_emb_path", type=str, default=r"./data/cc_news_pretrained/embedder/encoded/encoded.ckpt")
-    parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
-    parser.add_argument("--retriever_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-retriever")
-    # Reader
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-bert")
-
-    # For Benchmark testing
-    parser.add_argument("--retriever_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
-    parser.add_argument("--checkpoint_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
-
-
+    parser = get_arg_parser()
     args = parser.parse_args()
-    
     main(args)
