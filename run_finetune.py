@@ -204,10 +204,10 @@ def main(args):
     if args.resume:
         searcher, reader, tokenizer = get_searcher_reader_tokenizer(args, config)
     else:
-        #searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt(args, config)
+        searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt(args, config)
         # To test benchmark, please uncomment below lines and comment the above line.
-        from model import get_searcher_reader_tokenizer_tf
-        searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
+        # from model import get_searcher_reader_tokenizer_tf
+        # searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
 
     training_dataset, dev_dataset, eval_dataset = load_nq(args, tokenizer)
 
