@@ -1,18 +1,18 @@
-from argparse import ArgumentParser
-import os
+import itertools
 import logging
-
+import os
+from argparse import ArgumentParser
 
 import torch
 from torch.nn.utils import clip_grad_norm_
-import itertools
-from transformers import RealmConfig, get_linear_schedule_with_warmup
-from transformers.optimization import AdamW
-from transformers.models.realm.modeling_realm import logger as model_logger
 from tqdm import tqdm
 
-from model import get_searcher_reader_tokenizer, get_searcher_reader_tokenizer_pt
 from data import load_nq, normalize_answer
+from model import (get_searcher_reader_tokenizer,
+                   get_searcher_reader_tokenizer_pt_pretrained)
+from transformers import RealmConfig, get_linear_schedule_with_warmup
+from transformers.models.realm.modeling_realm import logger as model_logger
+from transformers.optimization import AdamW
 
 model_logger.setLevel(logging.INFO)
 logger = logging.getLogger()
@@ -205,7 +205,7 @@ def main(args):
     if args.resume:
         searcher, reader, tokenizer = get_searcher_reader_tokenizer(args, config)
     else:
-        searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt(args, config)
+        searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt_pretrained(args, config)
         # To test benchmark, please uncomment below lines and comment the above line.
         # from model import get_searcher_reader_tokenizer_tf
         # searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)

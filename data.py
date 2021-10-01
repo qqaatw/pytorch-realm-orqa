@@ -5,6 +5,7 @@ import unicodedata
 
 from datasets import load_dataset
 
+
 def normalize_answer(s):
     """Normalize answer. (Directly copied from ORQA codebase)"""
     s = unicodedata.normalize("NFD", s)

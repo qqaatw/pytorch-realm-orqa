@@ -1,10 +1,8 @@
 from transformers import RealmTokenizer
-from transformers.models.realm.modeling_realm import (
-    load_tf_weights_in_realm,
-    RealmConfig,
-    RealmReader,
-    RealmSearcher,
-)
+from transformers.models.realm.modeling_realm import (RealmConfig, RealmReader,
+                                                      RealmSearcher,
+                                                      load_tf_weights_in_realm)
+
 
 def get_searcher_reader_tokenizer_tf(args, config=None):
     if config is None: 
@@ -37,7 +35,7 @@ def get_searcher_reader_tokenizer_tf(args, config=None):
 
     return searcher, reader, tokenizer
 
-def get_searcher_reader_tokenizer_pt(args, config=None):
+def get_searcher_reader_tokenizer_pt_pretrained(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
     searcher = RealmSearcher.from_pretrained(args.retriever_pretrained_name, args.block_records_path, config=config)
@@ -48,6 +46,19 @@ def get_searcher_reader_tokenizer_pt(args, config=None):
         config,
         args.block_emb_path,
     )
+    searcher.eval()
+    
+    reader = RealmReader.from_pretrained(args.checkpoint_pretrained_name, config=config)
+    reader.eval()
+
+    tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+
+    return searcher, reader, tokenizer
+
+def get_searcher_reader_tokenizer_pt_finetuned(args, config=None):
+    if config is None: 
+        config = RealmConfig(hidden_act="gelu_new")
+    searcher = RealmSearcher.from_pretrained(args.retriever_pretrained_name, args.block_records_path, config=config)
     searcher.eval()
     
     reader = RealmReader.from_pretrained(args.checkpoint_pretrained_name, config=config)
