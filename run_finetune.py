@@ -4,6 +4,7 @@ import logging
 
 
 import torch
+from torch.nn.utils import clip_grad_norm_
 import itertools
 from transformers import RealmConfig, get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
@@ -211,8 +212,9 @@ def main(args):
 
     training_dataset, dev_dataset, eval_dataset = load_nq(args, tokenizer)
 
+    parameters = itertools.chain(searcher.parameters(), reader.parameters())
     optimizer = AdamW(
-        itertools.chain(searcher.parameters(), reader.parameters()),
+        parameters,
         lr=args.learning_rate,
         weight_decay=0.01,
     )
@@ -265,11 +267,14 @@ def main(args):
 
         for epoch in range(starting_epoch, args.num_epochs + 1):
             for batch in train_dataloader:
+                optimizer.zero_grad()
                 question, answer_texts, answers = batch
                 retriever_output = retrieve(args, searcher, tokenizer, question)
                 reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answers)
 
                 reader_output.loss.backward()
+                clip_grad_norm_(parameters, 1.0, norm_type=2.0, error_if_nonfinite=False)
+
                 optimizer.step()
                 lr_scheduler.step()
 
