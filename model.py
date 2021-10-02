@@ -1,7 +1,4 @@
-from transformers import RealmTokenizer
-from transformers.models.realm.modeling_realm import (RealmConfig, RealmReader,
-                                                      RealmSearcher,
-                                                      load_tf_weights_in_realm)
+from transformers import RealmConfig, RealmReader, RealmSearcher, RealmTokenizer, load_tf_weights_in_realm
 
 
 def get_searcher_reader_tokenizer_tf(args, config=None):

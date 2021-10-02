@@ -34,12 +34,12 @@ class DataCollator(object):
             answer_texts += short_answer["text"]
         answer_texts = list(set(answer_texts))
         if len(answer_texts) != 0:
-            answers = self.tokenizer(answer_texts, 
+            answer_ids = self.tokenizer(answer_texts, 
                 add_special_tokens=False, return_token_type_ids=False, return_attention_mask=False).input_ids
-            answers = list(filter(lambda answer: len(answer) <= self.args.max_answer_tokens, answers))
+            answer_ids = list(filter(lambda answer: len(answer) <= self.args.max_answer_tokens, answer_ids))
         else:
-            answers = [[-1]]
-        return question, answer_texts, answers
+            answer_ids = [[-1]]
+        return question, answer_texts, answer_ids
 
 def get_arg_parser():
     parser = ArgumentParser()
@@ -118,8 +118,8 @@ def retrieve(args, searcher, tokenizer, question):
 
     return output
 
-def read(args, reader, tokenizer, searcher_output, question, answers):
-    def block_has_answer(concat_inputs, answers):
+def read(args, reader, tokenizer, searcher_output, question, answer_ids):
+    def block_has_answer(concat_inputs, answer_ids):
         """check if retrieved_blocks has answers."""
         has_answers = []
         start_pos = []
@@ -132,7 +132,7 @@ def read(args, reader, tokenizer, searcher_output, question, answers):
             start=-1
             start_pos.append([])
             end_pos.append([])
-            for answer in answers:
+            for answer in answer_ids:
                 for idx, id in enumerate(input_id):
                     if id == tokenizer.sep_token_id:
                         pass_sep = True
@@ -183,7 +183,7 @@ def read(args, reader, tokenizer, searcher_output, question, answers):
 
     concat_inputs = tokenizer(text, text_pair, return_tensors='pt', padding=True, truncation=True, max_length=reader.config.reader_seq_len)
 
-    has_answers, start_positions, end_positions = block_has_answer(concat_inputs, answers)
+    has_answers, start_positions, end_positions = block_has_answer(concat_inputs, answer_ids)
 
     output = reader(
         input_ids=concat_inputs.input_ids[0: reader.config.reader_beam_size].to(args.device),
@@ -268,9 +268,9 @@ def main(args):
         for epoch in range(starting_epoch, args.num_epochs + 1):
             for batch in train_dataloader:
                 optimizer.zero_grad()
-                question, answer_texts, answers = batch
+                question, answer_texts, answer_ids = batch
                 retriever_output = retrieve(args, searcher, tokenizer, question)
-                reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answers)
+                reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answer_ids)
 
                 reader_output.loss.backward()
                 clip_grad_norm_(parameters, 1.0, norm_type=2.0, error_if_nonfinite=False)
@@ -278,7 +278,9 @@ def main(args):
                 optimizer.step()
                 lr_scheduler.step()
 
-                logging.info(f"Epoch: {epoch}, Step: {global_step}, Retriever Loss: {reader_output.retriever_loss.mean()}, Reader Loss: {reader_output.reader_loss.mean()}\nQuestion: {question}, Gold Answer: {tokenizer.batch_decode(answers) if answers != [[-1]] else None}, Predicted Answer: {predicted_answer}")
+                logging.info(
+                    f"Epoch: {epoch}, Step: {global_step}, Retriever Loss: {reader_output.retriever_loss.mean()}, Reader Loss: {reader_output.reader_loss.mean()}\nQuestion: {question}, Gold Answer: {tokenizer.batch_decode(answer_ids) if answer_ids != [[-1]] else None}, Predicted Answer: {predicted_answer}"
+                )
 
                 if global_step % args.ckpt_interval == 0:
                     logging.info(f"Saving checkpint at step {global_step}")
@@ -303,10 +305,10 @@ def main(args):
             reader.eval()
             all_metrics = []
             for batch in tqdm(eval_dataloader):
-                question, answer_texts, answers = batch
+                question, answer_texts, answer_ids = batch
                 with torch.no_grad():
                     retriever_output = retrieve(args, searcher, tokenizer, question)
-                    reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answers)
+                    reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answer_ids)
                     all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, reader_output))
 
             stacked_metrics = { 
@@ -340,10 +342,10 @@ def main(args):
 
         all_metrics = []
         for batch in tqdm(eval_dataloader):
-            question, answer_texts, answers = batch
+            question, answer_texts, answer_ids = batch
             with torch.no_grad():
                 retriever_output = retrieve(args, searcher, tokenizer, question)
-                reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answers)
+                reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answer_ids)
                 all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, reader_output))
 
 
