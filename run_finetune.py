@@ -130,31 +130,17 @@ def read(args, reader, tokenizer, searcher_output, question, answer_ids):
         max_answers = 0
 
         for input_id in concat_inputs.input_ids:
-            pass_sep = False
-            answer_pos = 0
-            start=-1
             start_pos.append([])
             end_pos.append([])
+            input_id = input_id.tolist()
+            sep_idx = input_id.index(tokenizer.sep_token_id)
             for answer in answer_ids:
-                for idx, id in enumerate(input_id):
-                    if id == tokenizer.sep_token_id:
-                        pass_sep = True
-                    if not pass_sep:
-                        continue
-                    if answer[answer_pos] == id:
-                        if start == -1:
-                            start = idx
-                        if answer_pos == len(answer) - 1:
-                            start_pos[-1].append(start)
-                            end_pos[-1].append(idx)
-                            answer_pos = 0
-                            start = -1
-                        else:
-                            answer_pos += 1
-                    else:
-                        answer_pos = 0
-                        start = -1
-            
+                for idx in range(sep_idx, len(input_id)):
+                    if answer[0] == input_id[idx]:
+                        if input_id[idx: idx + len(answer)] == answer:
+                            start_pos[-1].append(idx)
+                            end_pos[-1].append(idx + len(answer)-1)
+    
             if len(start_pos[-1]) == 0:
                 has_answers.append(False)
             else:
@@ -164,12 +150,10 @@ def read(args, reader, tokenizer, searcher_output, question, answer_ids):
 
         # Pad -1 to max_answers
         for start_pos_, end_pos_ in zip(start_pos, end_pos):
-            while len(start_pos_) < max_answers:
-                start_pos_.append(-1)
-            while len(end_pos_) < max_answers:
-                end_pos_.append(-1)
-
-        assert len(has_answers) == len(start_pos) == len(end_pos)
+            if len(start_pos_) < max_answers:
+                padded = [-1] * (max_answers - len(start_pos_))
+                start_pos_ += padded
+                end_pos_ += padded
 
         return (
             torch.tensor(has_answers, dtype=torch.bool),
