@@ -26,7 +26,7 @@ sh download.sh
 
 ## Finetune (Experimental)
 
-The default finetuning dataset is **NaturalQuestions(NQ)**. To laod your custom dataset, please change the loading function in `data.py`.
+The default finetuning dataset is **NaturalQuestions(NQ)**. To load your custom dataset, please change the loading function in `data.py`.
 
 Training:
 
