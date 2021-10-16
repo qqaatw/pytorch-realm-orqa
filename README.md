@@ -72,8 +72,8 @@ python run_finetune.py --benchmark --use_scann
 Outputs with ScaNN searcher:
 
 ```
-INFO:root:exact_match:0.40166205167770386 # value in the paper: ~0.404
-official_exact_match:0.3972299098968506
+INFO:root:exact_match:0.40166205167770386
+official_exact_match:0.3972299098968506 # value in the paper: ~0.404
 reader_oracle:0.7047091126441956
 top_5_match:0.7063711881637573
 top_10_match:0.7063711881637573
@@ -93,8 +93,8 @@ python run_finetune.py --benchmark
 Outputs with brute-force matrix multiplication searcher:
 
 ```
-INFO:root:exact_match:0.4102492928504944  # value in the paper: ~0.404
-official_exact_match:0.4041551351547241
+INFO:root:exact_match:0.4102492928504944
+official_exact_match:0.4041551351547241 # value in the paper: ~0.404
 reader_oracle:0.7193905711174011
 top_5_match:0.7218836545944214
 top_10_match:0.7218836545944214
