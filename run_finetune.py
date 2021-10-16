@@ -29,10 +29,10 @@ class DataCollator(object):
         self.tokenizer = tokenizer
     def __call__(self, batch):
         example = batch[0]
-        question = example["question.text"]
+        question = example["question"]
         answer_texts = []
-        for short_answer in example["annotations.short_answers"]:
-            answer_texts += short_answer["text"]
+        for answer in example["answers"]:
+            answer_texts += [answer] if isinstance(answer, str) else answer
         answer_texts = list(set(answer_texts))
         if len(answer_texts) != 0:
             answer_ids = self.tokenizer(answer_texts, 
