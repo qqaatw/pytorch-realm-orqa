@@ -7,7 +7,8 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from tqdm import tqdm
 
-from data import load_nq, normalize_answer
+from data import normalize_answer
+from data import load as load_dataset
 from model import (get_searcher_reader_tokenizer,
                    get_searcher_reader_tokenizer_pt_pretrained)
 from transformers import RealmConfig, get_linear_schedule_with_warmup
@@ -36,13 +37,14 @@ class DataCollator(object):
         if len(answer_texts) != 0:
             answer_ids = self.tokenizer(answer_texts, 
                 add_special_tokens=False, return_token_type_ids=False, return_attention_mask=False).input_ids
-            answer_ids = list(filter(lambda answer: len(answer) <= self.args.max_answer_tokens, answer_ids))
         else:
             answer_ids = [[-1]]
         return question, answer_texts, answer_ids
 
 def get_arg_parser():
     parser = ArgumentParser()
+
+    parser.add_argument("--benchmark", action="store_true")
 
     # Data processing
     parser.add_argument("--dev_ratio", type=float, default=0.1)
@@ -61,6 +63,7 @@ def get_arg_parser():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--searcher_beam_size", type=int, default=5000)
     parser.add_argument("--reader_beam_size", type=int, default=5)
+    parser.add_argument("--use_scann", action="store_true")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--num_training_steps", type=int, default=100)
     group.add_argument("--num_epochs", type=int, default=0)
@@ -146,7 +149,6 @@ def read(args, reader, tokenizer, searcher_output, question, answer_ids):
                             end_pos[-1].append(idx)
                             answer_pos = 0
                             start = -1
-                            break
                         else:
                             answer_pos += 1
                     else:
@@ -201,16 +203,17 @@ def read(args, reader, tokenizer, searcher_output, question, answer_ids):
     return output, answer
 
 def main(args):
-    config = RealmConfig(searcher_beam_size=10)
+    config = RealmConfig(searcher_beam_size=10, use_scann=args.use_scann)
     if args.resume:
         searcher, reader, tokenizer = get_searcher_reader_tokenizer(args, config)
     else:
-        searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt_pretrained(args, config)
-        # To test benchmark, please uncomment below lines and comment the above line.
-        # from model import get_searcher_reader_tokenizer_tf
-        # searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
+        if args.benchmark:
+            from model import get_searcher_reader_tokenizer_tf
+            searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
+        else:
+            searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt_pretrained(args, config)
 
-    training_dataset, dev_dataset, eval_dataset = load_nq(args, tokenizer)
+    training_dataset, dev_dataset, eval_dataset = load_dataset(args)
 
     parameters = itertools.chain(searcher.parameters(), reader.parameters())
     optimizer = AdamW(

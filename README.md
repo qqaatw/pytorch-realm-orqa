@@ -26,7 +26,7 @@ sh download.sh
 
 ## Finetune (Experimental)
 
-The default finetuning dataset is **Natural Question(NQ)**. To laod your custom dataset, please change the loading function in `data.py`.
+The default finetuning dataset is **NaturalQuestions(NQ)**. To laod your custom dataset, please change the loading function in `data.py`.
 
 Training:
 
@@ -55,6 +55,54 @@ The default checkpoints of retriever and reader are `orqa_nq_model_from_realm`. 
 python predictor.py --question "Who is the pioneer in modern computer science?"
 
 Output: alan mathison turing
+```
+
+## Benchmark
+
+Benchmarking on NaturalQuestions(NQ).
+
+To run benchmark, please ensure that `./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000` exists.
+
+Using ScaNN searcher:
+
+```bash
+python run_finetune.py --benchmark --use_scann
+```
+
+Outputs with ScaNN searcher:
+
+```
+INFO:root:exact_match:0.40166205167770386 # value in the paper: ~0.404
+official_exact_match:0.3972299098968506
+reader_oracle:0.7047091126441956
+top_5_match:0.7063711881637573
+top_10_match:0.7063711881637573
+top_50_match:0.7063711881637573
+top_100_match:0.7063711881637573
+top_500_match:0.7063711881637573
+top_1000_match:0.7063711881637573
+top_5000_match:0.7063711881637573
+```
+
+Using brute-force matrix multiplication searcher:
+
+```bash
+python run_finetune.py --benchmark
+```
+
+Outputs with brute-force matrix multiplication searcher:
+
+```
+INFO:root:exact_match:0.4102492928504944  # value in the paper: ~0.404
+official_exact_match:0.4041551351547241
+reader_oracle:0.7193905711174011
+top_5_match:0.7218836545944214
+top_10_match:0.7218836545944214
+top_50_match:0.7218836545944214
+top_100_match:0.7218836545944214
+top_500_match:0.7218836545944214
+top_1000_match:0.7218836545944214
+top_5000_match:0.7218836545944214
 ```
 
 ## License
