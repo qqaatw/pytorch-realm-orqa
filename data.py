@@ -92,3 +92,26 @@ def load_wq(args):
     # example["question"]
     # example["answers"][num_answers]
     return filtered_training_dataset, filtered_dev_dataset, filtered_eval_dataset
+
+
+class DataCollator(object):
+    def __init__(self, args, tokenizer):
+        self.args = args
+        self.tokenizer = tokenizer
+    def __call__(self, batch):
+        example = batch[0]
+        question = example["question"]
+        answer_texts = []
+        for answer in example["answers"]:
+            answer_texts += [answer] if isinstance(answer, str) else answer
+        answer_texts = list(set(answer_texts))
+        if len(answer_texts) != 0:
+            answer_ids = self.tokenizer(
+                answer_texts, 
+                add_special_tokens=False,
+                return_token_type_ids=False,
+                return_attention_mask=False,
+            ).input_ids
+        else:
+            answer_ids = [[-1]]
+        return question, answer_texts, answer_ids

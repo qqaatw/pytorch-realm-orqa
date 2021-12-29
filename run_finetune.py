@@ -7,7 +7,7 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from tqdm import tqdm
 
-from data import normalize_answer
+from data import DataCollator, normalize_answer
 from data import load as load_dataset
 from model import (get_searcher_reader_tokenizer,
                    get_searcher_reader_tokenizer_pt_pretrained)
@@ -23,23 +23,6 @@ torch.set_printoptions(precision=8)
 
 MAX_EPOCHS = 100
 
-class DataCollator(object):
-    def __init__(self, args, tokenizer):
-        self.args = args
-        self.tokenizer = tokenizer
-    def __call__(self, batch):
-        example = batch[0]
-        question = example["question"]
-        answer_texts = []
-        for answer in example["answers"]:
-            answer_texts += [answer] if isinstance(answer, str) else answer
-        answer_texts = list(set(answer_texts))
-        if len(answer_texts) != 0:
-            answer_ids = self.tokenizer(answer_texts, 
-                add_special_tokens=False, return_token_type_ids=False, return_attention_mask=False).input_ids
-        else:
-            answer_ids = [[-1]]
-        return question, answer_texts, answer_ids
 
 def get_arg_parser():
     parser = ArgumentParser()

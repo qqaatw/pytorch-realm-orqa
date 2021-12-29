@@ -1,5 +1,26 @@
-from transformers import RealmConfig, RealmReader, RealmSearcher, RealmTokenizer, load_tf_weights_in_realm
+from transformers import (
+    RealmConfig,
+    RealmReader,
+    RealmSearcher,
+    RealmForOpenQA,
+    RealmTokenizer,
+    load_tf_weights_in_realm,
+)
 
+
+def get_openqa(args, config=None):
+    if config is None: 
+        config = RealmConfig(hidden_act="gelu_new")
+
+    openqa = RealmForOpenQA.from_pretrained(
+        args.retriever_pretrained_name,
+        args.checkpoint_pretrained_name,
+        args.block_records_path,
+        config=config
+    )
+    openqa.eval()
+
+    return openqa
 
 def get_searcher_reader_tokenizer_tf(args, config=None):
     if config is None: 
