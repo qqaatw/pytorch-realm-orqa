@@ -8,6 +8,7 @@ from data import DataCollator
 from run_finetune import compute_eval_metrics
 from model import get_openqa
 
+
 def get_arg_parser():
     parser = ArgumentParser()
 
@@ -20,24 +21,23 @@ def get_arg_parser():
 
     # Model
     parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
-    parser.add_argument("--retriever_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-searcher")
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-reader")
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa")
 
     # Config
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--use_scann", action="store_true")
 
     return parser
 
 def main(args):
-    config = RealmConfig(searcher_beam_size=10, use_scann=args.use_scann)
+    config = RealmConfig(searcher_beam_size=10)
     
     openqa = get_openqa(args, config=config)
     openqa.to(args.device)
+    tokenizer = openqa.retriever.tokenizer         
 
     # Setup data
     _, _, eval_dataset = load_dataset(args)
-    data_collector = DataCollator(args, openqa.tokenizer)
+    data_collector = DataCollator(args, tokenizer)
     eval_dataloader = torch.utils.data.DataLoader(
         dataset=eval_dataset,
         batch_size=1,
@@ -49,10 +49,17 @@ def main(args):
     all_metrics = []
     for batch in tqdm(eval_dataloader):
         question, answer_texts, answer_ids = batch
-        with torch.no_grad():
-            openqa_output = openqa(question, answer_ids, return_dict=True)
-            all_metrics.append(compute_eval_metrics(answer_texts, openqa_output.predicted_answer, openqa_output.reader_output))
+        question_ids = tokenizer(question, return_tensors="pt").input_ids
 
+        with torch.no_grad():
+            outputs = openqa(
+                input_ids=question_ids.to(args.device),
+                answer_ids=answer_ids,
+                return_dict=True,
+            )
+
+        predicted_answer = tokenizer.decode(outputs.predicted_answer_ids)
+        all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, outputs.reader_output))
 
     stacked_metrics = { 
         metric_key : torch.stack((*map(lambda metrics: metrics[metric_key], all_metrics),)) for metric_key in all_metrics[0].keys()

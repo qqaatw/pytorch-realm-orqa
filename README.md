@@ -11,7 +11,7 @@ Some features have not been implemented yet, currently the predictor and finetun
 
 ```bash
 cd transformers && pip install -U -e ".[dev]"
-pip install -U scann, apache_beam
+pip install -U apache_beam
 ```
 
 ## Data
@@ -22,6 +22,38 @@ To download pretrained checkpoints and preprocessed data, please follow the inst
 cd data
 pip install -U -r requirements.txt
 sh download.sh
+```
+
+To convert pretrained TensorFlow checkpoints like `ccnews` to PyTorch checkpoints:
+
+```bash
+python checkpoint_converter.py \
+    --block_records_path "data/enwiki-20181220/blocks.tfr" \
+    --block_emb_path "./data/cc_news_pretrained/embedder/encoded/encoded.ckpt" \
+    --embedder_path "./data/cc_news_pretrained/embedder/variables/variables" \
+    --bert_path "./data/cc_news_pretrained/bert/variables/variables" \
+    --output_path path_to_save_converted_model \
+    --from_pretrained
+```
+
+To convert finetuned TensorFlow checkpoints like `NaturalQuestions` to PyTorch checkpoints:
+
+```bash
+python checkpoint_converter.py \
+    --block_records_path "data/enwiki-20181220/blocks.tfr" \
+    --block_emb_path "./data/cc_news_pretrained/embedder/encoded/encoded.ckpt" \
+    --checkpoint_path "./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000" \
+    --output_path path_to_save_converted_model
+```
+
+## Predict
+
+The default checkpoint is `qqaatw/realm-orqa-nq-openqa`. To change it, kindly specify `--checkpoint_pretrained_name`, which can be a local path or a model name on the huggingface model hub.
+
+```bash
+python predictor.py --question "Who is the pioneer in modern computer science?"
+
+Output: alan mathison turing
 ```
 
 ## Finetune (Experimental)
@@ -41,29 +73,16 @@ Evaluation:
 
 ```bash
 python run_finetune.py \
-    --retriever_pretrained_name "retriever" \
     --checkpoint_pretrained_name "reader" \
     --model_dir "./" \
     --device cuda
-```
-
-## Predict
-
-The default checkpoints of retriever and reader are `orqa_nq_model_from_realm`. To change them, kindly specify `--retriever_path` and `--checkpoint_path`.
-
-```bash
-python predictor.py --question "Who is the pioneer in modern computer science?"
-
-Output: alan mathison turing
 ```
 
 ## Benchmark
 
 ### NaturalQuestions(NQ)
 
-To run benchmark, please ensure that `./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000` exists.
-
-Using ScaNN searcher:
+~Using ScaNN searcher~(deprecated):
 
 ```bash
 python run_finetune.py --benchmark --use_scann
@@ -87,7 +106,11 @@ top_5000_match:0.7058171629905701
 Using brute-force matrix multiplication searcher:
 
 ```bash
-python run_finetune.py --benchmark
+python benchmark.py \
+    --dataset_name_path natural_questions \
+    --checkpoint_pretrained_name qqaatw/realm-orqa-nq-openqa \
+    --block_records_path ./data/enwiki-20181220/blocks.tfr \
+    --device cuda
 ```
 
 Outputs with brute-force matrix multiplication searcher:
@@ -107,9 +130,7 @@ top_5000_match:0.7218836545944214
 
 ### WebQuestions(WQ)
 
-To run benchmark, please ensure that `./data/orqa_wq_model_from_realm/export/best_default/checkpoint/model.ckpt-205020` exists.
-
-Using ScaNN searcher:
+~Using ScaNN searcher~(deprecated):
 
 ```bash
 python run_finetune.py \
@@ -138,11 +159,11 @@ top_5000_match:0.6840550899505615
 Using brute-force matrix multiplication searcher:
 
 ```bash
-python run_finetune.py \
-    --benchmark \
+python benchmark.py \
     --dataset_name_path web_questions \
-    --retriever_path ./data/orqa_wq_model_from_realm/export/best_default/checkpoint/model.ckpt-205020 \
-    --checkpoint_path ./data/orqa_wq_model_from_realm/export/best_default/checkpoint/model.ckpt-205020
+    --checkpoint_pretrained_name qqaatw/realm-orqa-wq-openqa \
+    --block_records_path ./data/enwiki-20181220/blocks.tfr \
+    --device cuda
 ```
 
 Outputs with brute-force matrix multiplication searcher:

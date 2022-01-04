@@ -9,8 +9,7 @@ from tqdm import tqdm
 
 from data import DataCollator, normalize_answer
 from data import load as load_dataset
-from model import (get_searcher_reader_tokenizer,
-                   get_searcher_reader_tokenizer_pt_pretrained)
+from model import get_openqa
 from transformers import RealmConfig, get_linear_schedule_with_warmup
 from transformers.models.realm.modeling_realm import logger as model_logger
 from transformers.optimization import AdamW
@@ -46,7 +45,6 @@ def get_arg_parser():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--searcher_beam_size", type=int, default=5000)
     parser.add_argument("--reader_beam_size", type=int, default=5)
-    parser.add_argument("--use_scann", action="store_true")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--num_training_steps", type=int, default=100)
     group.add_argument("--num_epochs", type=int, default=0)
@@ -55,15 +53,8 @@ def get_arg_parser():
     parser.add_argument("--checkpoint_name", type=str, default="checkpoint.pt")
 
     # Model path
-    # Retriever
-    parser.add_argument("--block_emb_path", type=str, default=r"./data/cc_news_pretrained/embedder/encoded/encoded.ckpt")
     parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
-    parser.add_argument("--retriever_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-retriever")
-    # Reader
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-bert")
-    # For Benchmark testing
-    parser.add_argument("--retriever_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
-    parser.add_argument("--checkpoint_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000")
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-openqa")
 
     return parser
 
@@ -87,7 +78,6 @@ def compute_eval_metrics(labels, predicted_answer, reader_output):
 
     official_exact_match = _official_exact_match(predicted_answer, labels)
 
-
     eval_metric = dict(
         exact_match=exact_match[0][0],
         official_exact_match=official_exact_match,
@@ -98,93 +88,17 @@ def compute_eval_metrics(labels, predicted_answer, reader_output):
         eval_metric["top_{}_match".format(k)] = torch.any(reader_output.retriever_correct[:k])
     return eval_metric
 
-def retrieve(args, searcher, tokenizer, question):
-    question_ids = tokenizer([question], return_tensors='pt')
-    output = searcher(**question_ids.to(args.device), return_dict=True)
-
-    return output
-
-def read(args, reader, tokenizer, searcher_output, question, answer_ids):
-    def block_has_answer(concat_inputs, answer_ids):
-        """check if retrieved_blocks has answers."""
-        has_answers = []
-        start_pos = []
-        end_pos = []
-        max_answers = 0
-
-        for input_id in concat_inputs.input_ids:
-            start_pos.append([])
-            end_pos.append([])
-            input_id = input_id.tolist()
-            sep_idx = input_id.index(tokenizer.sep_token_id)
-            for answer in answer_ids:
-                for idx in range(sep_idx, len(input_id)):
-                    if answer[0] == input_id[idx]:
-                        if input_id[idx: idx + len(answer)] == answer:
-                            start_pos[-1].append(idx)
-                            end_pos[-1].append(idx + len(answer)-1)
-    
-            if len(start_pos[-1]) == 0:
-                has_answers.append(False)
-            else:
-                has_answers.append(True)
-                if len(start_pos[-1]) > max_answers:
-                    max_answers = len(start_pos[-1])
-
-        # Pad -1 to max_answers
-        for start_pos_, end_pos_ in zip(start_pos, end_pos):
-            if len(start_pos_) < max_answers:
-                padded = [-1] * (max_answers - len(start_pos_))
-                start_pos_ += padded
-                end_pos_ += padded
-
-        return (
-            torch.tensor(has_answers, dtype=torch.bool),
-            torch.tensor(start_pos, dtype=torch.int64),
-            torch.tensor(end_pos, dtype=torch.int64),
-        )
-
-    text = []
-    text_pair = []
-    for retrieved_block in searcher_output.retrieved_blocks:
-        text.append(question)
-        text_pair.append(retrieved_block.decode())
-
-    concat_inputs = tokenizer(text, text_pair, return_tensors='pt', padding=True, truncation=True, max_length=reader.config.reader_seq_len)
-
-    has_answers, start_positions, end_positions = block_has_answer(concat_inputs, answer_ids)
-
-    output = reader(
-        input_ids=concat_inputs.input_ids[0: reader.config.reader_beam_size].to(args.device),
-        attention_mask=concat_inputs.attention_mask[0: reader.config.reader_beam_size].to(args.device),
-        token_type_ids=concat_inputs.token_type_ids[0: reader.config.reader_beam_size].to(args.device),
-        relevance_score=searcher_output.retrieved_logits.to(args.device),
-        has_answers=has_answers.to(args.device),
-        start_positions=start_positions.to(args.device),
-        end_positions=end_positions.to(args.device),
-        return_dict=True,
-    )
-
-    answer = tokenizer.decode(concat_inputs.input_ids[output.block_idx][output.start_pos: output.end_pos + 1])
-
-    return output, answer
-
 def main(args):
-    config = RealmConfig(searcher_beam_size=10, use_scann=args.use_scann)
+    config = RealmConfig(searcher_beam_size=10)
     if args.resume:
-        searcher, reader, tokenizer = get_searcher_reader_tokenizer(args, config)
+        searcher, reader, tokenizer = get_openqa(args, config)
     else:
-        if args.benchmark:
-            from model import get_searcher_reader_tokenizer_tf
-            searcher, reader, tokenizer = get_searcher_reader_tokenizer_tf(args, config)
-        else:
-            searcher, reader, tokenizer = get_searcher_reader_tokenizer_pt_pretrained(args, config)
+        openqa = get_openqa(args, config)
 
     training_dataset, dev_dataset, eval_dataset = load_dataset(args)
 
-    parameters = itertools.chain(searcher.parameters(), reader.parameters())
     optimizer = AdamW(
-        parameters,
+        openqa.parameters(),
         lr=args.learning_rate,
         weight_decay=0.01,
     )
@@ -198,8 +112,7 @@ def main(args):
     if args.is_train:
         if args.resume:
             checkpoint = torch.load(os.path.join(args.model_dir, "checkpoint.pt"), map_location='cpu')
-            searcher.load_state_dict(checkpoint["searcher_state_dict"])
-            reader.load_state_dict(checkpoint["reader_state_dict"])
+            openqa.load_state_dict(checkpoint["openqa_state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
             global_step = checkpoint["training_step"]
@@ -208,14 +121,11 @@ def main(args):
             global_step = 1
             starting_epoch = 1
 
-        # Setup training mode
-        searcher.train()
-        searcher.to(args.device)
-        reader.train()
-        reader.to(args.device)
+        openqa.to(args.device)
 
         # Setup data
         print(training_dataset)
+        tokenizer = openqa.retriever.tokenizer
         data_collector = DataCollator(args, tokenizer)
         train_dataloader = torch.utils.data.DataLoader(
             dataset=training_dataset,
@@ -236,14 +146,25 @@ def main(args):
             args.num_training_steps = args.num_epochs * len(train_dataloader)
 
         for epoch in range(starting_epoch, args.num_epochs + 1):
+
+            # Setup training mode
+            openqa.train()
+
             for batch in train_dataloader:
                 optimizer.zero_grad()
                 question, answer_texts, answer_ids = batch
-                retriever_output = retrieve(args, searcher, tokenizer, question)
-                reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answer_ids)
+                
+                question_ids = tokenizer(question, return_tensors="pt").input_ids
+                reader_output, predicted_answer_ids = openqa(
+                    input_ids=question_ids.to(args.device),
+                    answer_ids=answer_ids,
+                    return_dict=False,
+                )
+
+                predicted_answer = tokenizer.decode(predicted_answer_ids)
 
                 reader_output.loss.backward()
-                clip_grad_norm_(parameters, 1.0, norm_type=2.0, error_if_nonfinite=False)
+                clip_grad_norm_(openqa.parameters(), 1.0, norm_type=2.0, error_if_nonfinite=False)
 
                 optimizer.step()
                 lr_scheduler.step()
@@ -256,8 +177,7 @@ def main(args):
                     logging.info(f"Saving checkpint at step {global_step}")
                     torch.save(
                         {
-                            'searcher_state_dict': searcher.state_dict(),
-                            'reader_state_dict': reader.state_dict(),
+                            'state_dict': openqa.state_dict(),
                             'optimizer_state_dict': optimizer.state_dict(),
                             'lr_scheduler_state_dict': lr_scheduler.state_dict(),
                             'training_step': global_step,
@@ -270,16 +190,23 @@ def main(args):
                 if global_step >= args.num_training_steps:
                     break
             
-            # Eval
-            searcher.eval()
-            reader.eval()
+            # Setup eval mode
+            openqa.eval()
             all_metrics = []
+
             for batch in tqdm(eval_dataloader):
                 question, answer_texts, answer_ids = batch
+                
+                question_ids = tokenizer(question, return_tensors="pt").input_ids
                 with torch.no_grad():
-                    retriever_output = retrieve(args, searcher, tokenizer, question)
-                    reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answer_ids)
-                    all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, reader_output))
+                    outputs = openqa(
+                        input_ids=question_ids.to(args.device),
+                        answer_ids=answer_ids,
+                        return_dict=True,
+                    )
+
+                predicted_answer = tokenizer.decode(outputs.predicted_answer_ids)
+                all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, outputs.reader_output))
 
             stacked_metrics = { 
                 metric_key : torch.stack((*map(lambda metrics: metrics[metric_key], all_metrics),)) for metric_key in all_metrics[0].keys()
@@ -290,15 +217,12 @@ def main(args):
             if global_step >= args.num_training_steps:
                 break
 
-        
-        searcher.save_pretrained(os.path.join(args.model_dir, "retriever/"))
-        reader.save_pretrained(os.path.join(args.model_dir, "reader/"))
+        openqa.save_pretrained(os.path.join(args.model_dir, "openqa/"))
 
     else:
-        searcher.eval()
-        searcher.to(args.device)
-        reader.eval()
-        reader.to(args.device)
+        # Setup eval mode
+        openqa.eval()
+        openqa.to(args.device)
 
         # Setup data
         print(eval_dataset)
@@ -313,10 +237,17 @@ def main(args):
         all_metrics = []
         for batch in tqdm(eval_dataloader):
             question, answer_texts, answer_ids = batch
+            question_ids = tokenizer(question, return_tensors="pt").input_ids
+
             with torch.no_grad():
-                retriever_output = retrieve(args, searcher, tokenizer, question)
-                reader_output, predicted_answer = read(args, reader, tokenizer, retriever_output, question, answer_ids)
-                all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, reader_output))
+                outputs = openqa(
+                    input_ids=question_ids.to(args.device),
+                    answer_ids=answer_ids,
+                    return_dict=True,
+                )
+
+            predicted_answer = tokenizer.decode(outputs.predicted_answer_ids)
+            all_metrics.append(compute_eval_metrics(answer_texts, predicted_answer, outputs.reader_output))
 
 
         stacked_metrics = { 
