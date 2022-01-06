@@ -29,11 +29,10 @@ def get_arg_parser():
     finetuned_group.add_argument("--checkpoint_path", type=str, default=r"./data/orqa_nq_model_from_realm/export/best_default/checkpoint/model.ckpt-300000",
         help="Finetuned checkpoint path.")
     
-    # Output path
     parser.add_argument("--output_path", type=str, default=r"./converted_model/",
         help="Converted checkpoint path.")
     parser.add_argument("--from_pretrained", action="store_true",
-        help="Whether to convert from a pretrained checkpoint or a fintuned checkpoint.")
+        help="Whether to convert from a pretrained checkpoint or a finetuned checkpoint.")
 
     return parser
 
