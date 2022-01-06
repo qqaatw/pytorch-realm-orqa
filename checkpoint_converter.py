@@ -46,6 +46,7 @@ def main(args):
         model = get_openqa_tf_finetuned(args, config)
     
     model.save_pretrained(args.output_path)
+    model.retriever.save_pretrained(args.output_path)
 
 if __name__ == "__main__":
     parser = get_arg_parser()

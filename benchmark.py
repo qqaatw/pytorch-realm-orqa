@@ -20,7 +20,6 @@ def get_arg_parser():
     parser.add_argument("--max_answer_tokens", type=int, default=5)
 
     # Model
-    parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
     parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa")
 
     # Config

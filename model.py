@@ -7,6 +7,7 @@ from transformers import (
     RealmTokenizer,
     load_tf_weights_in_realm,
 )
+from transformers.models.realm.retrieval_realm import convert_tfrecord_to_np
 
 
 def get_openqa_tf_finetuned(args, config=None):
@@ -15,7 +16,8 @@ def get_openqa_tf_finetuned(args, config=None):
 
     tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
-    retriever = RealmRetriever(config, tokenizer, args.block_records_path)
+    block_records = convert_tfrecord_to_np(args.block_records_path, config.num_block_records)
+    retriever = RealmRetriever(block_records, tokenizer)
 
     openqa = RealmForOpenQA(config, retriever)
 
@@ -41,7 +43,8 @@ def get_openqa_tf_pretrained(args, config=None):
 
     tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
-    retriever = RealmRetriever(config, tokenizer, args.block_records_path)
+    block_records = convert_tfrecord_to_np(args.block_records_path, config.num_block_records)
+    retriever = RealmRetriever(block_records, tokenizer)
 
     openqa = RealmForOpenQA(config, retriever)
 
@@ -54,7 +57,7 @@ def get_openqa_tf_pretrained(args, config=None):
     openqa = load_tf_weights_in_realm(
         openqa,
         config,
-        args.embedder,
+        args.embedder_path,
     )
 
     openqa = load_tf_weights_in_realm(
@@ -71,9 +74,7 @@ def get_openqa(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
 
-    tokenizer = RealmTokenizer.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
-
-    retriever = RealmRetriever(config, tokenizer, args.block_records_path)
+    retriever = RealmRetriever.from_pretrained(args.checkpoint_pretrained_name)
 
     openqa = RealmForOpenQA.from_pretrained(
         args.checkpoint_pretrained_name,

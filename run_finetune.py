@@ -1,4 +1,3 @@
-import itertools
 import logging
 import os
 from argparse import ArgumentParser
@@ -26,8 +25,6 @@ MAX_EPOCHS = 100
 def get_arg_parser():
     parser = ArgumentParser()
 
-    parser.add_argument("--benchmark", action="store_true")
-
     # Data processing
     parser.add_argument("--dev_ratio", type=float, default=0.1)
     parser.add_argument("--max_answer_tokens", type=int, default=5)
@@ -39,7 +36,7 @@ def get_arg_parser():
 
     # Training hparams
     parser.add_argument("--ckpt_interval", type=int, default=10)
-    parser.add_argument("--device", type=str, default='cuda')
+    parser.add_argument("--device", type=str, default='cpu')
     parser.add_argument("--is_train", action="store_true")
     parser.add_argument("--learning_rate", type=float, default=1e-5)
     parser.add_argument("--resume", action="store_true")
@@ -53,7 +50,6 @@ def get_arg_parser():
     parser.add_argument("--checkpoint_name", type=str, default="checkpoint.pt")
 
     # Model path
-    parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
     parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-openqa")
 
     return parser
@@ -91,9 +87,11 @@ def compute_eval_metrics(labels, predicted_answer, reader_output):
 def main(args):
     config = RealmConfig(searcher_beam_size=10)
     if args.resume:
-        searcher, reader, tokenizer = get_openqa(args, config)
+        openqa = get_openqa(args, config)
     else:
         openqa = get_openqa(args, config)
+
+    tokenizer = openqa.retriever.tokenizer
 
     training_dataset, dev_dataset, eval_dataset = load_dataset(args)
 
@@ -111,8 +109,8 @@ def main(args):
 
     if args.is_train:
         if args.resume:
-            checkpoint = torch.load(os.path.join(args.model_dir, "checkpoint.pt"), map_location='cpu')
-            openqa.load_state_dict(checkpoint["openqa_state_dict"])
+            checkpoint = torch.load(os.path.join(args.model_dir, args.checkpoint_name), map_location='cpu')
+            openqa.load_state_dict(checkpoint["state_dict"])
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
             global_step = checkpoint["training_step"]
@@ -125,7 +123,6 @@ def main(args):
 
         # Setup data
         print(training_dataset)
-        tokenizer = openqa.retriever.tokenizer
         data_collector = DataCollator(args, tokenizer)
         train_dataloader = torch.utils.data.DataLoader(
             dataset=training_dataset,
@@ -220,6 +217,9 @@ def main(args):
         openqa.save_pretrained(os.path.join(args.model_dir, "openqa/"))
 
     else:
+        checkpoint = torch.load(os.path.join(args.model_dir, args.checkpoint_name), map_location='cpu')
+        openqa.load_state_dict(checkpoint["state_dict"])
+        
         # Setup eval mode
         openqa.eval()
         openqa.to(args.device)
@@ -256,7 +256,6 @@ def main(args):
 
         logging.info('\n'.join(map(lambda metric: f"{metric[0]}:{metric[1].type(torch.float32).mean()}", stacked_metrics.items())))
         
-
 
 if __name__ == "__main__":
     logging.info("Test logging")
