@@ -9,8 +9,7 @@ This is PyTorch reimplementation of REALM ([paper](https://arxiv.org/abs/2002.08
 ## Prerequisite
 
 ```bash
-cd transformers && pip install -U -e ".[dev]"
-pip install -U apache_beam
+pip install -U transformers apache_beam
 ```
 
 ## Data
