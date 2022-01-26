@@ -15,7 +15,7 @@ pip install -U apache_beam
 
 ## Data
 
-To download pretrained checkpoints and preprocessed data, please follow the instructions below:
+To download TensorFlow checkpoints and preprocessed data, please follow the instructions below:
 
 ```bash
 cd data
@@ -64,18 +64,23 @@ Training:
 ```bash
 python run_finetune.py --is_train \
     --checkpoint_pretrained_name "qqaatw/realm-cc-news-pretrained-openqa" \
-    --checkpoint_name "checkpoint.pt" \
+    --checkpoint_name "checkpoint" \
+    --dataset_name_path "natural_questions" \
     --model_dir "./" \
     --num_epochs 2 \
     --device cuda
 ```
+
+The output model will be stored in `./checkpoint-x`, where x is the training step when saving.
 
 Evaluation:
 
 ```bash
 python run_finetune.py \
     --checkpoint_pretrained_name "qqaatw/realm-cc-news-pretrained-openqa" \
-    --checkpoint_name "checkpoint.pt" \
+    --checkpoint_name "checkpoint" \
+    --checkpoint_step 50000 \
+    --dataset_name_path "natural_questions" \
     --model_dir "./" \
     --device cuda
 ```

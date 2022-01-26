@@ -11,46 +11,71 @@ from data import load as load_dataset
 from model import get_openqa
 from transformers import RealmConfig, get_linear_schedule_with_warmup
 from transformers.models.realm.modeling_realm import logger as model_logger
-from transformers.optimization import AdamW
 
 model_logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+file_handler = logging.FileHandler('fine-tuning_test.log')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(formatter)
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 torch.set_printoptions(precision=8)
 
-MAX_EPOCHS = 100
+MAX_EPOCHS = 2
 
 
 def get_arg_parser():
     parser = ArgumentParser()
 
     # Data processing
-    parser.add_argument("--dev_ratio", type=float, default=0.1)
-    parser.add_argument("--max_answer_tokens", type=int, default=5)
+    parser.add_argument("--dev_ratio", type=float, default=0.1,
+        help="The ratio of development set which will be splitted from training set.")
+    parser.add_argument("--max_answer_tokens", type=int, default=5,
+        help="Answers below max_answer_tokens will be used for training and evaluation.")
 
     # Training dir
-    parser.add_argument("--dataset_name_path", type=str, default=r"natural_questions")
-    parser.add_argument("--dataset_cache_dir", type=str, default=r"./data/dataset_cache_dir/")
-    parser.add_argument("--model_dir", type=str, default=r"./")
+    parser.add_argument("--dataset_name_path", type=str, default=r"natural_questions", 
+        help="Dataset name or path. Currently available datasets: natural_questions and web_questions. See data.py for more details.")
+    parser.add_argument("--dataset_cache_dir", type=str, default=r"./data/dataset_cache_dir/",
+        help="Directory storing dataset caches.")
+    parser.add_argument("--model_dir", type=str, default=r"./",
+        help="Directory storing resulting models. ")
 
     # Training hparams
-    parser.add_argument("--ckpt_interval", type=int, default=10)
-    parser.add_argument("--device", type=str, default='cpu')
-    parser.add_argument("--is_train", action="store_true")
-    parser.add_argument("--learning_rate", type=float, default=1e-5)
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--searcher_beam_size", type=int, default=5000)
-    parser.add_argument("--reader_beam_size", type=int, default=5)
+    parser.add_argument("--ckpt_interval", type=int, default=5000,
+        help="Number of steps the checkpoint will be saved.")
+    parser.add_argument("--device", type=str, default='cpu',
+        help="Device used for training and evaluation.")
+    parser.add_argument("--is_train", action="store_true",
+        help="If specified, training mode is set; otherwise, evaluation mode is set.")
+    parser.add_argument("--learning_rate", type=float, default=1e-5,
+        help="Learning rate.")
+    parser.add_argument("--searcher_beam_size", type=int, default=5000,
+        help="Searcher (Retriever) beam size.")
+    parser.add_argument("--reader_beam_size", type=int, default=5,
+        help="Reader beam size.")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--num_training_steps", type=int, default=100)
-    group.add_argument("--num_epochs", type=int, default=0)
+    group.add_argument("--num_training_steps", type=int, default=100,
+        help="Number of training steps.")
+    group.add_argument("--num_epochs", type=int, default=0,
+        help="Number of training epochs.")
 
     # Evaluation hparams
-    parser.add_argument("--checkpoint_name", type=str, default="checkpoint.pt")
+    parser.add_argument("--checkpoint_name", type=str, default="checkpoint",
+        help="Checkpoint name for evalutaion.")
+    parser.add_argument("--checkpoint_step", type=int, default=5000,
+        help="Checkpoint step for evalutaion.")
 
     # Model path
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-openqa")
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-openqa",
+        help="Pretrained checkpoint for fine-tuning.")
 
     return parser
 
@@ -85,44 +110,54 @@ def compute_eval_metrics(labels, predicted_answer, reader_output):
     return eval_metric
 
 def main(args):
-    config = RealmConfig(searcher_beam_size=10)
-    if args.resume:
-        openqa = get_openqa(args, config)
-    else:
-        openqa = get_openqa(args, config)
+    config = RealmConfig(
+        searcher_beam_size=args.searcher_beam_size,
+        reader_beam_size=args.reader_beam_size,
+    )
 
+    openqa = get_openqa(args, config)
+    retriever = openqa.retriever
     tokenizer = openqa.retriever.tokenizer
 
     training_dataset, dev_dataset, eval_dataset = load_dataset(args)
 
-    optimizer = AdamW(
-        openqa.parameters(),
-        lr=args.learning_rate,
-        weight_decay=0.01,
-    )
-    lr_scheduler = get_linear_schedule_with_warmup(
-        optimizer=optimizer,
-        num_warmup_steps=min(10000, max(100,
-                                    int(args.num_training_steps / 10))),
-        num_training_steps=args.num_training_steps,
-    )
+    # Optimizer
+    # See: https://github.com/huggingface/transformers/blob/e239fc3b0baf1171079a5e0177a69254350a063b/examples/pytorch/language-modeling/run_mlm_no_trainer.py#L456-L468
+    no_decay = ["bias", "LayerNorm.weight"]
+    optimizer_grouped_parameters = [
+        {
+            "params": [p for n, p in openqa.named_parameters() if not any(nd in n for nd in no_decay)],
+            "weight_decay": 0.01,
+        },
+        {
+            "params": [p for n, p in openqa.named_parameters() if any(nd in n for nd in no_decay)],
+            "weight_decay": 0.0,
+        },
+    ]
 
     if args.is_train:
-        if args.resume:
-            checkpoint = torch.load(os.path.join(args.model_dir, args.checkpoint_name), map_location='cpu')
-            openqa.load_state_dict(checkpoint["state_dict"])
-            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
-            global_step = checkpoint["training_step"]
-            starting_epoch = checkpoint["training_epoch"]
-        else:
-            global_step = 1
-            starting_epoch = 1
+        global_step = 1
+        starting_epoch = 1
 
         openqa.to(args.device)
 
+        optimizer = torch.optim.AdamW(
+            optimizer_grouped_parameters,
+            lr=args.learning_rate,
+            weight_decay=0.01,
+            eps=1e-6,
+        )
+        lr_scheduler = get_linear_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=min(10000, max(100,
+                                        int(args.num_training_steps / 10))),
+            num_training_steps=args.num_training_steps,
+        )
+
         # Setup data
-        print(training_dataset)
+        logging.info(training_dataset)
+        logging.info(dev_dataset)
+
         data_collector = DataCollator(args, tokenizer)
         train_dataloader = torch.utils.data.DataLoader(
             dataset=training_dataset,
@@ -172,16 +207,7 @@ def main(args):
 
                 if global_step % args.ckpt_interval == 0:
                     logging.info(f"Saving checkpint at step {global_step}")
-                    torch.save(
-                        {
-                            'state_dict': openqa.state_dict(),
-                            'optimizer_state_dict': optimizer.state_dict(),
-                            'lr_scheduler_state_dict': lr_scheduler.state_dict(),
-                            'training_step': global_step,
-                            'training_epoch': epoch,
-                        }, 
-                        os.path.join(args.model_dir, "checkpoint.pt")
-                    )
+                    openqa.save_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{global_step}"))
 
                 global_step += 1
                 if global_step >= args.num_training_steps:
@@ -214,18 +240,17 @@ def main(args):
             if global_step >= args.num_training_steps:
                 break
 
-        openqa.save_pretrained(os.path.join(args.model_dir, "openqa/"))
-
+        logging.info(f"Saving final checkpint at step {global_step}")
+        openqa.save_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{global_step}"))
     else:
-        checkpoint = torch.load(os.path.join(args.model_dir, args.checkpoint_name), map_location='cpu')
-        openqa.load_state_dict(checkpoint["state_dict"])
+        openqa = openqa.from_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{args.checkpoint_step}"), retriever)
         
         # Setup eval mode
         openqa.eval()
         openqa.to(args.device)
 
         # Setup data
-        print(eval_dataset)
+        logging.info(eval_dataset)
         data_collector = DataCollator(args, tokenizer)
         eval_dataloader = torch.utils.data.DataLoader(
             dataset=eval_dataset,
