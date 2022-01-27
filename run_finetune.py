@@ -141,19 +141,6 @@ def main(args):
 
         openqa.to(args.device)
 
-        optimizer = torch.optim.AdamW(
-            optimizer_grouped_parameters,
-            lr=args.learning_rate,
-            weight_decay=0.01,
-            eps=1e-6,
-        )
-        lr_scheduler = get_linear_schedule_with_warmup(
-            optimizer=optimizer,
-            num_warmup_steps=min(10000, max(100,
-                                        int(args.num_training_steps / 10))),
-            num_training_steps=args.num_training_steps,
-        )
-
         # Setup data
         logging.info(training_dataset)
         logging.info(dev_dataset)
@@ -176,6 +163,19 @@ def main(args):
             args.num_epochs = MAX_EPOCHS
         else:
             args.num_training_steps = args.num_epochs * len(train_dataloader)
+
+        optimizer = torch.optim.AdamW(
+            optimizer_grouped_parameters,
+            lr=args.learning_rate,
+            weight_decay=0.01,
+            eps=1e-6,
+        )
+        lr_scheduler = get_linear_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=min(10000, max(100,
+                                        int(args.num_training_steps / 10))),
+            num_training_steps=args.num_training_steps,
+        )
 
         for epoch in range(starting_epoch, args.num_epochs + 1):
 

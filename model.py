@@ -74,7 +74,7 @@ def get_openqa(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
 
-    retriever = RealmTokenizerFast.from_pretrained(args.checkpoint_pretrained_name)
+    retriever = RealmRetriever.from_pretrained(args.checkpoint_pretrained_name)
 
     openqa = RealmForOpenQA.from_pretrained(
         args.checkpoint_pretrained_name,
