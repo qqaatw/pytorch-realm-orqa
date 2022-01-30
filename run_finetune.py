@@ -15,7 +15,7 @@ from transformers.models.realm.modeling_realm import logger as model_logger
 model_logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter('%(asctime)s - %(message)s')
-file_handler = logging.FileHandler('fine-tuning_test.log')
+file_handler = logging.FileHandler('fine-tuning.log')
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 stream_handler = logging.StreamHandler()
@@ -240,7 +240,7 @@ def main(args):
             if global_step >= args.num_training_steps:
                 break
 
-        logging.info(f"Saving final checkpint at step {global_step}")
+        logging.info(f"Saving final checkpoint at step {global_step}")
         openqa.save_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{global_step}"))
     else:
         openqa = openqa.from_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{args.checkpoint_step}"), retriever)

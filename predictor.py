@@ -14,11 +14,8 @@ torch.set_printoptions(precision=8)
 def get_arg_parser():
     parser = ArgumentParser()
 
-    # Question
     parser.add_argument("--question", type=str, required=True,
         help="Input question.")
-    # Retriever
-    parser.add_argument("--block_records_path", type=str, default=r"./data/enwiki-20181220/blocks.tfr")
     parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa")
 
     return parser
