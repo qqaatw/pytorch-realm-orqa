@@ -34,6 +34,8 @@ def load(args):
         return load_nq(args)
     elif args.dataset_name_path == "web_questions":
         return load_wq(args)
+    elif args.dataset_name_path == "dummy":
+        return load_dummy(args)
     else:
         raise ValueError("Invalid dataset name or path")
     
@@ -93,6 +95,22 @@ def load_wq(args):
     # example["answers"][num_answers]
     return filtered_training_dataset, filtered_dev_dataset, filtered_eval_dataset
 
+def load_dummy(args):
+    dataset = [
+        {
+            "question": "What is the previous name of Meta Platform, Inc.?",
+            "answers": [
+                "facebook, inc.",
+            ],
+        },
+        {
+            "question": "Who is the pioneer in modern computer science?",
+            "answers": [
+                "alan mathison turing",
+            ],
+        },
+    ]
+    return dataset, dataset, dataset
 
 class DataCollator(object):
     def __init__(self, args, tokenizer):
