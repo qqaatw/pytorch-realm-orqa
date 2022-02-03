@@ -1,9 +1,9 @@
 from argparse import ArgumentParser
-import os
 
 import torch
 
-from model import get_openqa
+from model import get_openqa, add_additional_documents
+
 from transformers.models.realm.modeling_realm import logger
 from transformers.utils import logging
 
@@ -16,13 +16,19 @@ def get_arg_parser():
 
     parser.add_argument("--question", type=str, required=True,
         help="Input question.")
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa")
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa",
+        help="Checkpoint name or path.")
+    parser.add_argument("--additional_documents_path", type=str, default=None,
+        help="Additional document entries for retrieval. Must be .npy format.")
 
     return parser
 
 def main(args):
     openqa = get_openqa(args)
     tokenizer = openqa.retriever.tokenizer
+
+    if args.additional_documents_path is not None:
+        add_additional_documents(openqa, args.additional_documents_path)
 
     question_ids = tokenizer(args.question, return_tensors="pt").input_ids
 

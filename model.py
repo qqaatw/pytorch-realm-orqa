@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 from transformers import (
     RealmConfig,
     RealmReader,
@@ -9,6 +11,26 @@ from transformers import (
 )
 from transformers.models.realm.retrieval_realm import convert_tfrecord_to_np
 
+
+def add_additional_documents(openqa, additional_documents_path):
+    documents = np.load(additional_documents_path, allow_pickle=True)
+    total_documents = documents.shape[0]
+
+    retriever = openqa.retriever
+    tokenizer = openqa.retriever.tokenizer
+    
+    # docs
+    retriever.block_records = np.concatenate((retriever.block_records, documents), axis=0)
+
+    # embeds
+    documents = [doc.decode() for doc in documents]
+    inputs = tokenizer(documents, padding=True, truncation=True, return_tensors="pt")
+
+    with torch.no_grad():
+        projected_score = openqa.embedder(**inputs, return_dict=True).projected_score
+        openqa.block_emb = torch.cat((openqa.block_emb, projected_score), dim=0)
+
+    openqa.config.num_block_records += total_documents
 
 def get_openqa_tf_finetuned(args, config=None):
     if config is None: 

@@ -44,6 +44,16 @@ python checkpoint_converter.py \
     --output_path path_to_save_converted_model
 ```
 
+The format of additional documents are built like this in NumPy:
+
+```python
+    array(
+        [b"Meta Platforms, Inc., doing business as Meta and formerly known as Facebook, Inc., is an American multinational technology conglomerate based in Menlo Park, California. The company is the parent organization of Facebook, Instagram, and WhatsApp, among other subsidiaries. Meta is one of the world's most valuable companies. It is one of the Big Five American information technology companies, alongside Google (Alphabet Inc.), Amazon, Apple, and Microsoft",
+         b"Coronavirus disease 2019 (COVID-19) is a contagious disease caused by severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2). The first known case was identified in Wuhan, China, in December 2019. The disease has since spread worldwide, leading to an ongoing pandemic."], 
+         dtype=object
+    )
+```
+
 ## Predict
 
 The default checkpoint is `qqaatw/realm-orqa-nq-openqa`. To change it, kindly specify `--checkpoint_pretrained_name`, which can be a local path or a model name on the huggingface model hub.
@@ -52,6 +62,16 @@ The default checkpoint is `qqaatw/realm-orqa-nq-openqa`. To change it, kindly sp
 python predictor.py --question "Who is the pioneer in modern computer science?"
 
 Output: alan mathison turing
+```
+
+Loading additional documents for retrieval:
+
+```bash
+python predictor.py \
+    --question "What is the previous name of Meta Platform, Inc.?" \
+    --additional_documents_path "additional_documents.npy"
+
+Output: facebook, inc.
 ```
 
 ## Finetune (Experimental)
@@ -65,22 +85,27 @@ python run_finetune.py --is_train \
     --checkpoint_pretrained_name "qqaatw/realm-cc-news-pretrained-openqa" \
     --checkpoint_name "checkpoint" \
     --dataset_name_path "natural_questions" \
-    --model_dir "./" \
+    --model_dir "./out/" \
     --num_epochs 2 \
     --device cuda
 ```
 
-The output model will be stored in `./checkpoint-x`, where x is the training step when saving.
+Loading additional documents for retrieval:
+
+```bash
+    --additional_documents_path "additional_documents.npy"
+```
+
+The output model and the additional documents will be stored in `./out/checkpoint-x` directory, where `x` is the training step when saving. So if you've added additional documents when training, there is no need to specify it during evaluation.
 
 Evaluation:
 
 ```bash
 python run_finetune.py \
-    --checkpoint_pretrained_name "qqaatw/realm-cc-news-pretrained-openqa" \
     --checkpoint_name "checkpoint" \
     --checkpoint_step 50000 \
     --dataset_name_path "natural_questions" \
-    --model_dir "./" \
+    --model_dir "./out/" \
     --device cuda
 ```
 

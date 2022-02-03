@@ -8,8 +8,8 @@ from tqdm import tqdm
 
 from data import DataCollator, normalize_answer
 from data import load as load_dataset
-from model import get_openqa
-from transformers import RealmConfig, get_linear_schedule_with_warmup
+from model import get_openqa, add_additional_documents
+from transformers import RealmConfig, RealmForOpenQA, RealmRetriever, get_linear_schedule_with_warmup
 from transformers.models.realm.modeling_realm import logger as model_logger
 
 model_logger.setLevel(logging.INFO)
@@ -45,7 +45,7 @@ def get_arg_parser():
         help="Dataset name or path. Currently available datasets: natural_questions and web_questions. See data.py for more details.")
     parser.add_argument("--dataset_cache_dir", type=str, default=r"./data/dataset_cache_dir/",
         help="Directory storing dataset caches.")
-    parser.add_argument("--model_dir", type=str, default=r"./",
+    parser.add_argument("--model_dir", type=str, default=r"./out/",
         help="Directory storing resulting models. ")
 
     # Training hparams
@@ -76,6 +76,8 @@ def get_arg_parser():
     # Model path
     parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-openqa",
         help="Pretrained checkpoint for fine-tuning.")
+    parser.add_argument("--additional_documents_path", type=str, default=None,
+        help="Additional document entries for retrieval. Must be .npy format.")
 
     return parser
 
@@ -110,34 +112,24 @@ def compute_eval_metrics(labels, predicted_answer, reader_output):
     return eval_metric
 
 def main(args):
-    config = RealmConfig(
-        searcher_beam_size=args.searcher_beam_size,
-        reader_beam_size=args.reader_beam_size,
-    )
-
-    openqa = get_openqa(args, config)
-    retriever = openqa.retriever
-    tokenizer = openqa.retriever.tokenizer
 
     training_dataset, dev_dataset, eval_dataset = load_dataset(args)
-
-    # Optimizer
-    # See: https://github.com/huggingface/transformers/blob/e239fc3b0baf1171079a5e0177a69254350a063b/examples/pytorch/language-modeling/run_mlm_no_trainer.py#L456-L468
-    no_decay = ["bias", "LayerNorm.weight"]
-    optimizer_grouped_parameters = [
-        {
-            "params": [p for n, p in openqa.named_parameters() if not any(nd in n for nd in no_decay)],
-            "weight_decay": 0.01,
-        },
-        {
-            "params": [p for n, p in openqa.named_parameters() if any(nd in n for nd in no_decay)],
-            "weight_decay": 0.0,
-        },
-    ]
 
     if args.is_train:
         global_step = 1
         starting_epoch = 1
+
+        config = RealmConfig(
+            searcher_beam_size=args.searcher_beam_size,
+            reader_beam_size=args.reader_beam_size,
+        )
+
+        openqa = get_openqa(args, config)
+        retriever = openqa.retriever
+        tokenizer = openqa.retriever.tokenizer
+
+        if args.additional_documents_path is not None:
+            add_additional_documents(openqa, args.additional_documents_path)
 
         openqa.to(args.device)
 
@@ -163,6 +155,20 @@ def main(args):
             args.num_epochs = MAX_EPOCHS
         else:
             args.num_training_steps = args.num_epochs * len(train_dataloader)
+        
+        # Optimizer
+        # See: https://github.com/huggingface/transformers/blob/e239fc3b0baf1171079a5e0177a69254350a063b/examples/pytorch/language-modeling/run_mlm_no_trainer.py#L456-L468
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in openqa.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": 0.01,
+            },
+            {
+                "params": [p for n, p in openqa.named_parameters() if any(nd in n for nd in no_decay)],
+                "weight_decay": 0.0,
+            },
+        ]
 
         optimizer = torch.optim.AdamW(
             optimizer_grouped_parameters,
@@ -242,9 +248,18 @@ def main(args):
 
         logging.info(f"Saving final checkpoint at step {global_step}")
         openqa.save_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{global_step}"))
+        retriever.save_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{global_step}"))
     else:
-        openqa = openqa.from_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{args.checkpoint_step}"), retriever)
+        retriever = RealmRetriever.from_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{args.checkpoint_step}"))
+        tokenizer = retriever.tokenizer
+        openqa = RealmForOpenQA.from_pretrained(os.path.join(args.model_dir, f"{args.checkpoint_name}-{args.checkpoint_step}"), retriever)
         
+        openqa.config.searcher_beam_size = args.searcher_beam_size
+        openqa.config.reader_beam_size = args.reader_beam_size
+        
+        if args.additional_documents_path is not None:
+            add_additional_documents(openqa, args.additional_documents_path)
+
         # Setup eval mode
         openqa.eval()
         openqa.to(args.device)
