@@ -16,7 +16,7 @@ def get_arg_parser():
 
     parser.add_argument("--question", type=str, required=True,
         help="Input question.")
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa",
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"google/realm-orqa-nq-openqa",
         help="Checkpoint name or path.")
     parser.add_argument("--additional_documents_path", type=str, default=None,
         help="Additional document entries for retrieval. Must be .npy format.")

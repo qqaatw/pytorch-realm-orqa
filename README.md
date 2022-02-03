@@ -56,7 +56,7 @@ The format of additional documents are built like this in NumPy:
 
 ## Predict
 
-The default checkpoint is `qqaatw/realm-orqa-nq-openqa`. To change it, kindly specify `--checkpoint_pretrained_name`, which can be a local path or a model name on the huggingface model hub.
+The default checkpoint is `google/realm-orqa-nq-openqa`. To change it, kindly specify `--checkpoint_pretrained_name`, which can be a local path or a model name on the huggingface model hub.
 
 ```bash
 python predictor.py --question "Who is the pioneer in modern computer science?"
@@ -82,7 +82,7 @@ Training:
 
 ```bash
 python run_finetune.py --is_train \
-    --checkpoint_pretrained_name "qqaatw/realm-cc-news-pretrained-openqa" \
+    --checkpoint_pretrained_name "google/realm-cc-news-pretrained-openqa" \
     --checkpoint_name "checkpoint" \
     --dataset_name_path "natural_questions" \
     --model_dir "./out/" \
@@ -118,7 +118,7 @@ Using brute-force matrix multiplication searcher:
 ```bash
 python benchmark.py \
     --dataset_name_path natural_questions \
-    --checkpoint_pretrained_name qqaatw/realm-orqa-nq-openqa \
+    --checkpoint_pretrained_name google/realm-orqa-nq-openqa \
     --device cuda
 ```
 
@@ -165,7 +165,7 @@ Using brute-force matrix multiplication searcher:
 ```bash
 python benchmark.py \
     --dataset_name_path web_questions \
-    --checkpoint_pretrained_name qqaatw/realm-orqa-wq-openqa \
+    --checkpoint_pretrained_name google/realm-orqa-wq-openqa \
     --device cuda
 ```
 

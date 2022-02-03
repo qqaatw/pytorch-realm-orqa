@@ -74,7 +74,7 @@ def get_arg_parser():
         help="Checkpoint step for evalutaion.")
 
     # Model path
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-cc-news-pretrained-openqa",
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"google/realm-cc-news-pretrained-openqa",
         help="Pretrained checkpoint for fine-tuning.")
     parser.add_argument("--additional_documents_path", type=str, default=None,
         help="Additional document entries for retrieval. Must be .npy format.")

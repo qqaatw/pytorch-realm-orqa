@@ -36,7 +36,7 @@ def get_openqa_tf_finetuned(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
 
-    tokenizer = RealmTokenizerFast.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+    tokenizer = RealmTokenizerFast.from_pretrained("google/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     block_records = convert_tfrecord_to_np(args.block_records_path, config.num_block_records)
     retriever = RealmRetriever(block_records, tokenizer)
@@ -63,7 +63,7 @@ def get_openqa_tf_pretrained(args, config=None):
     if config is None: 
         config = RealmConfig(hidden_act="gelu_new")
 
-    tokenizer = RealmTokenizerFast.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+    tokenizer = RealmTokenizerFast.from_pretrained("google/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     block_records = convert_tfrecord_to_np(args.block_records_path, config.num_block_records)
     retriever = RealmRetriever(block_records, tokenizer)
@@ -134,7 +134,7 @@ def get_scorer_reader_tokenizer_tf(args, config=None):
     )
     reader.eval()
 
-    tokenizer = RealmTokenizerFast.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+    tokenizer = RealmTokenizerFast.from_pretrained("google/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     return scorer, reader, tokenizer
 
@@ -154,7 +154,7 @@ def get_scorer_reader_tokenizer_pt_pretrained(args, config=None):
     reader = RealmReader.from_pretrained(args.checkpoint_pretrained_name, config=config)
     reader.eval()
 
-    tokenizer = RealmTokenizerFast.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+    tokenizer = RealmTokenizerFast.from_pretrained("google/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     return scorer, reader, tokenizer
 
@@ -167,7 +167,7 @@ def get_scorer_reader_tokenizer_pt_finetuned(args, config=None):
     reader = RealmReader.from_pretrained(args.checkpoint_pretrained_name, config=config)
     reader.eval()
 
-    tokenizer = RealmTokenizerFast.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+    tokenizer = RealmTokenizerFast.from_pretrained("google/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     return scorer, reader, tokenizer
 
@@ -177,6 +177,6 @@ def get_scorer_reader_tokenizer(args, config=None):
 
     scorer = RealmScorer(config, args.block_records_path)
     reader = RealmReader(config)
-    tokenizer = RealmTokenizerFast.from_pretrained("qqaatw/realm-cc-news-pretrained-embedder", do_lower_case=True)
+    tokenizer = RealmTokenizerFast.from_pretrained("google/realm-cc-news-pretrained-embedder", do_lower_case=True)
 
     return scorer, reader, tokenizer

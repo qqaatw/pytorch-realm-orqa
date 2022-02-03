@@ -20,7 +20,7 @@ def get_arg_parser():
     parser.add_argument("--max_answer_tokens", type=int, default=5)
 
     # Model
-    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"qqaatw/realm-orqa-nq-openqa")
+    parser.add_argument("--checkpoint_pretrained_name", type=str, default=r"google/realm-orqa-nq-openqa")
 
     # Config
     parser.add_argument("--device", type=str, default="cpu")
